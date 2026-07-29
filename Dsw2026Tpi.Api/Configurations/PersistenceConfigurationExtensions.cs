@@ -12,7 +12,8 @@ public static class PersistenceConfigurationExtensions
         IConfiguration configuration)
     {
         //Obtener cadena de conexión desde appsettings.json
-        var connectionString = configuration.GetConnectionString("DefaultConnection");
+        var connectionString = configuration.GetConnectionString("DefaultConnection")
+            ?? throw new InvalidOperationException("No se configuró DefaultConnection.");
 
         //Agregar contexto (O/RM) y utilizar SQL Server para DB
         services.AddDbContext<Dsw2026TpiDbContext>(options =>
