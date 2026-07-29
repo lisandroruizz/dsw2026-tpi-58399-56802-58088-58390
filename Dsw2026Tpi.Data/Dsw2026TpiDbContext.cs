@@ -17,4 +17,34 @@ public class Dsw2026TpiDbContext: DbContext
         base.OnModelCreating(modelBuilder);
         modelBuilder.ApplyConfigurationsFromAssembly(Assembly.GetExecutingAssembly());
     }
+
+    public override int SaveChanges()
+    {
+        ActualizarCamposDeAuditoria();
+        return base.SaveChanges();
+    }
+
+    public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+    {
+        ActualizarCamposDeAuditoria();
+        return base.SaveChangesAsync(cancellationToken);
+    }
+
+    private void ActualizarCamposDeAuditoria()
+    {
+        DateTime ahora = DateTime.UtcNow;
+
+        foreach (var entry in ChangeTracker.Entries<EntityBase>())
+        {
+            if (entry.State == EntityState.Added)
+            {
+                entry.Entity.CreatedAt = ahora;
+                entry.Entity.UpdatedAt = ahora;
+            }
+            else if (entry.State == EntityState.Modified)
+            {
+                entry.Entity.UpdatedAt = ahora;
+            }
+        }
+    }
 }
