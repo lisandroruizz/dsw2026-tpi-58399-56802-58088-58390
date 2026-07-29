@@ -17,18 +17,38 @@ public class PersistenceEf: IPersistence
     public async Task<T> Add<T>(T entity) where T : EntityBase
     {
         await _context.AddAsync(entity);
-        await _context.SaveChangesAsync();
         return entity;
     }
 
-    public async Task<T> Delete<T>(T entity) where T : EntityBase
+    public async Task AddRange<T>(
+       IEnumerable<T> entities)
+       where T : EntityBase
     {
-        var a = entity.Id;
-        _context.Remove(entity);
-        await _context.SaveChangesAsync();
-        return entity;
+        await _context.AddRangeAsync(entities);
     }
 
+    public Task<T> Delete<T>(T entity) where T : EntityBase
+    {
+        entity.Delete();
+
+        _context.Update(entity);
+
+        return Task.FromResult(entity);
+    }
+
+    public Task DeleteRange<T>(
+        IEnumerable<T> entities)
+        where T : EntityBase
+    {
+        foreach (T entity in entities)
+        {
+            entity.Delete();
+        }
+
+        _context.UpdateRange(entities);
+
+        return Task.CompletedTask;
+    }
     public async Task<T?> First<T>(Expression<Func<T, bool>> predicate, params string[] include) where T : EntityBase
     {
         return await Include(_context.Set<T>(), include).FirstOrDefaultAsync(predicate);
@@ -49,13 +69,34 @@ public class PersistenceEf: IPersistence
         return await Include(_context.Set<T>(), include).Where(predicate).ToListAsync();
     }
 
-    public async Task<T> Update<T>(T entity) where T : EntityBase
+    public Task<T> Update<T>(T entity) where T : EntityBase
     {
         _context.Update(entity);
-        await _context.SaveChangesAsync();
-        return entity;
+
+        return Task.FromResult(entity);
     }
 
+    public Task<int> SaveChanges()
+    {
+        return _context.SaveChangesAsync();
+    }
+
+    public async Task<bool> TrySaveChanges()
+    {
+        try
+        {
+            await _context.SaveChangesAsync();
+            return true;
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return false;
+        }
+        catch (DbUpdateException)
+        {
+            return false;
+        }
+    }
     public async Task<Pagination<T>> Paginate<T, TKey>(int pageSize, int pageIndex, Expression<Func<T, bool>> predicate, Expression<Func<T, TKey>> sortOrder, params string[] includes) where T : EntityBase
     {
         pageSize = Math.Abs(pageSize);
