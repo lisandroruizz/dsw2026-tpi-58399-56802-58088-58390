@@ -10,6 +10,7 @@ public class ExceptionHandlingMiddleware
 {
     private readonly RequestDelegate _next;
     private readonly ILogger<ExceptionHandlingMiddleware> _logger;
+    private readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     public ExceptionHandlingMiddleware(RequestDelegate next, ILogger<ExceptionHandlingMiddleware> logger)
     {
@@ -23,29 +24,56 @@ public class ExceptionHandlingMiddleware
         {
             await _next(context);
         }
-        catch (Exception ex)
+        catch (Exception exception)
         {
-            _logger.LogError(ex, "Se produjo un error durante el procesamiento de la solicitud");
-            await HandleExceptionAsync(context, ex);
+            if(exception is AppException)
+            {
+                _logger.LogWarning(
+                    "Solicitud rechazada: {ExceptionType} - {Message}", exception.GetType().Name, exception.Message 
+                                  );
+            }
+            else
+            {
+                _logger.LogError(
+                    exception,
+                    "Se produjo un error no controlado durante la solicitud"
+
+                                );
+                await HandleExceptionAsync(context, exception);
+            }
         }
     }
 
-    private async Task HandleExceptionAsync(HttpContext context, Exception ex)
+    private async Task HandleExceptionAsync(HttpContext context, Exception exception)
     {
-        ErrorResponse error = ex is AppException exApp ? 
-            exApp.Error : 
-            new ErrorResponse(nameof(ErrorCodes.UNHANDLED_ERROR), ErrorCodes.UNHANDLED_ERROR);
-        var status = ex switch
+        if(context.Response.HasStarted)
         {
-            ValidationException => HttpStatusCode.BadRequest,
+            throw exception;
+        }
+
+        ErrorResponse error = exception is AppException appException ? appException.Error : new ErrorResponse(
+            nameof(ErrorCodes.UNHANDLED_ERROR),
+            ErrorCodes.UNHANDLED_ERROR
+            
+            );
+
+        HttpStatusCode status = exception switch
+        {
+            ValidationException or BusinessRuleException => HttpStatusCode.BadRequest,
             EntityNotFoundException => HttpStatusCode.NotFound,
-            ConflictException or AuthenticationException => HttpStatusCode.Conflict,
-            AuthorizationException => HttpStatusCode.Unauthorized,
-            _ => HttpStatusCode.InternalServerError,
+            ConflictException => HttpStatusCode.Conflict,
+            AuthenticationException => HttpStatusCode.Unauthorized,
+            AuthorizationException => HttpStatusCode.Forbidden,
+            _ => HttpStatusCode.InternalServerError
         };
-        var result = JsonSerializer.Serialize(error);
+
         context.Response.ContentType = "application/json";
-        context.Response.StatusCode = (int)status;
-        await context.Response.WriteAsync(result);
+        context.Response.StatusCode = (int) status;
+
+        await context.Response.WriteAsync(
+
+            JsonSerializer.Serialize(error, JsonOptions)
+
+                                         );
     }
 }
