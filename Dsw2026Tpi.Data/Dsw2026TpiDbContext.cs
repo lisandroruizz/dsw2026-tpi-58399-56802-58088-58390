@@ -11,7 +11,10 @@ public class Dsw2026TpiDbContext: DbContext
     {
     }
 
- 
+
+    public DbSet<Speciality> Specialities => Set<Speciality>();
+
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
