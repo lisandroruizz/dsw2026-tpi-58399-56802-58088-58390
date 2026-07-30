@@ -9,5 +9,18 @@ public class SpecialityConfiguration : IEntityTypeConfiguration<Speciality>
     public void Configure(EntityTypeBuilder<Speciality> builder)
     {
         builder.ToTable("Specialities");
+
+        builder.HasKey(x => x.Id);
+
+        builder.Property(x => x.Id).ValueGeneratedNever();
+        builder.Property(x => x.Name).IsRequired().HasMaxLength(100);
+        builder.Property(x => x.Description).IsRequired().HasMaxLength(100);
+        builder.Property(x => x.Deleted).IsRequired().HasDefaultValue(false);
+
+        builder.HasIndex(x => x.Name);
+        builder.HasQueryFilter(x => !x.Deleted); 
+
+            
+
     }
 }
