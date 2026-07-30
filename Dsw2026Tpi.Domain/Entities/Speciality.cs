@@ -5,6 +5,8 @@ public class Speciality: EntityBase
     public string Name { get; private set; }
     public string Description { get; private set; }
 
+    public ICollection<Doctor> Doctors { get; private set; } = new List<Doctor>();
+
     #region Constructor for EF
 #pragma warning disable CS8618
     private Speciality() { }
