@@ -1,5 +1,8 @@
 @Dsw2026Tpi.Api_HostAddress = https://localhost:7001
 @accessToken = 
+@specialityId = 00000000-0000-0000-0000-000000000000
+@doctorId = 00000000-0000-0000-0000-000000000000
+@availabilityId = 00000000-0000-0000-0000-000000000000
 
 ### Health Check
 GET {{Dsw2026Tpi.Api_HostAddress}}/health-check
@@ -27,3 +30,20 @@ Content-Type: application/json
   "specialityId": "{{specialityId}}"
 } 
 
+### Crear disponibilidad mensual
+POST {{host}}/api/availabilities
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+{
+}
+"doctorId": "{{doctorId}}",
+"days": [
+{
+"day": "LUNES",
+"startTime": "09:00",
+"endTime": "12:00"
+}
+]
+### Consultar slots libres
+GET {{host}}/api/availabilities?doctorId={{doctorId}}
+Authorization: Bearer {{patientToken}}
