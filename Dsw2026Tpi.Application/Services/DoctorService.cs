@@ -63,6 +63,30 @@ public class DoctorService : IDoctorService
 
     }
 
+    public async Task<IReadOnlyCollection<AvailabilityModel.ScheduleResponse>> GetMonthlyAvailabilities(Guid doctorId)
+    {
+        _ = await _persistence.GetById<Doctor>(doctorId)
+            ?? throw new EntityNotFoundException("Médico");
+
+        DateOnly today = DateOnly.FromDateTime(DateTime.Today);
+        DateOnly firstDay = new(today.Year, today.Month, 1);
+        DateOnly lastDay = firstDay.AddMonths(1).AddDays(-1);
+
+        var availabilities = (await _persistence.GetFiltered<Availability>(
+                availability => availability.DoctorId == doctorId &&
+                                availability.Date >= firstDay &&
+                                availability.Date <= lastDay))
+            .ToArray();
+
+        return availabilities
+            .GroupBy(x => x.Date.DayOfWeek)
+            .OrderBy(x => DayOrder(x.Key))
+            .Select(group => new AvailabilityModel.ScheduleResponse(
+                DayName(group.Key),
+                group.Min(x => x.StartTime).ToString("HH:mm"),
+                group.Max(x => x.EndTime).ToString("HH:mm")))
+            .ToArray();
+    }
     private async Task<Speciality> GetSpeciality(Guid specialityId)
     {
         if (specialityId == Guid.Empty)
@@ -100,4 +124,16 @@ public class DoctorService : IDoctorService
                                        );
     }
 
+    private static string DayName(DayOfWeek day) => day switch
+    {
+        DayOfWeek.Monday => "LUNES",
+        DayOfWeek.Tuesday => "MARTES",
+        DayOfWeek.Wednesday => "MIÉRCOLES",
+        DayOfWeek.Thursday => "JUEVES",
+        DayOfWeek.Friday => "VIERNES",
+        DayOfWeek.Saturday => "SÁBADO",
+        DayOfWeek.Sunday => "DOMINGO",
+        _ => day.ToString().ToUpperInvariant()
+    };
+    private static int DayOrder(DayOfWeek day) => day == DayOfWeek.Sunday ? 7 : (int)day;
 }

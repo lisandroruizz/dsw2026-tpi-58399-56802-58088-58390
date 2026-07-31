@@ -26,7 +26,14 @@ public class DoctorController : AppController
 
     }
 
-        [Authorize(Policy = Policies.AdminPolicy)]
+    [HttpGet("{id:guid}/availabilities")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetAvailabilities(Guid id)
+    {
+        return Ok(await _service.GetMonthlyAvailabilities(id));
+    }   
+
+    [Authorize(Policy = Policies.AdminPolicy)]
         [HttpPost]
         [ProducesResponseType(typeof(DoctorModel.Response), StatusCodes.Status201Created)]
 

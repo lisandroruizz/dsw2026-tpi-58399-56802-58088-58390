@@ -6,6 +6,7 @@ public class Doctor: EntityBase
     public string LicenseNumber { get; private set; }
     public Guid SpecialityId { get; private set; }
     public Speciality Speciality { get; private set; }
+    public ICollection<Availability> Availabilities { get; private set; } = new List<Availability>();
 
     #region Constructor for EF
 #pragma warning disable CS8618
