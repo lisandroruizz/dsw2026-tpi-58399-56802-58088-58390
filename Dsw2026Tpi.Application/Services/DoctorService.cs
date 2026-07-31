@@ -19,7 +19,11 @@ public class DoctorService : IDoctorService
 
     public async Task<Pagination<DoctorModel.Response>> GetAll(int pageSize, int pageIndex, string? name = null)
     {
-       String? filter = string.IsNullOrWhiteSpace(name) ? null : name.Trim();
+
+        ServiceValidation.ValidatePagination(pageSize, pageIndex); 
+        ServiceValidation.ValidateOptionalName(name);
+
+        String? filter = string.IsNullOrWhiteSpace(name) ? null : name.Trim();
 
         var doctors = await _persistence.Paginate<Doctor, string>(pageSize, pageIndex, doctor => filter == null 
         || doctor.Name.Contains(filter), doctor => doctor.Name,nameof(Doctor.Speciality));

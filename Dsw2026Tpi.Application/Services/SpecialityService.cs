@@ -19,11 +19,12 @@ namespace Dsw2026Tpi.Application.Services
         {
             _persistence = persistence;
         }
-        public async Task<Pagination<SpecialityModel.Response>> GetAll(
-        int pageSize,
-        int pageIndex,
-        string? name = null)
+        public async Task<Pagination<SpecialityModel.Response>> GetAll( int pageSize,int pageIndex,string? name = null)
         {
+
+            ServiceValidation.ValidatePagination(pageSize, pageIndex); 
+            ServiceValidation.ValidateOptionalName(name);
+
             string? filter = string.IsNullOrWhiteSpace(name) ? null : name.Trim();
             var specialities = await _persistence.Paginate<Speciality, string>
                 (
