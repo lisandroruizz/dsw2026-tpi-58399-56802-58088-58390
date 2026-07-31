@@ -5,4 +5,25 @@
 GET {{Dsw2026Tpi.Api_HostAddress}}/health-check
 Accept: application/json
 
-###
+### Crear especialidad
+POST {{host}}/api/specialties Authorization: Bearer {{adminToken}} Content-Type: application/json 
+{ 
+  "name": "Cardiología",
+  "description": "Atención y control cardiovascular"
+}  
+
+### Listar especialidades 
+
+GET {{host}}/api/specialties?pageSize=10&pageIndex=0 
+Authorization: Bearer {{adminToken}}
+
+### Crear médico 
+POST {{host}}/api/doctors
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+{
+  "name": "Ana Pérez",
+  "licenseNumber": "MP-12345", 
+  "specialityId": "{{specialityId}}"
+} 
+
