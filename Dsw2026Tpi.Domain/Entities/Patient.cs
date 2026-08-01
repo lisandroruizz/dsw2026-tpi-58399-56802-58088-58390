@@ -12,9 +12,12 @@ public class Patient : EntityBase
     public string? Name { get; private set; }
     public string? Phone { get; private set; }
 
+    public ICollection<Appointment> Appointments { get; private set; } = new List<Appointment>();
+
+
     #region Constructor for EF 
 #pragma warning disable CS8648
-  private Patient() { }
+    private Patient() { }
 #pragma warning restore CS8618
     #endregion
 
@@ -29,6 +32,7 @@ public class Patient : EntityBase
     {
         Name = string.IsNullOrWhiteSpace(name) ? null : name.Trim();
         Phone = string.IsNullOrWhiteSpace(phone) ? null : phone.Trim(); 
+
     }
 
 
