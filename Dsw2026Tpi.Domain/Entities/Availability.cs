@@ -12,7 +12,9 @@ namespace Dsw2026Tpi.Domain.Entities
         public DateOnly Date { get; private set; }
         public TimeOnly StartTime { get; private set; }
         public TimeOnly EndTime { get; private set; }
-        public AvailabilityStatus Status { get; private set; } 
+        public AvailabilityStatus Status { get; private set; }
+
+        public ICollection<Appointment> Appointments { get; private set; } = new List<Appointment>();
 
         #region Constructor for EF
 #pragma warning disable CS8618

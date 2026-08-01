@@ -10,4 +10,8 @@ namespace Dsw2026Tpi.Domain.Enums
         Reserved,
         Booked
     }
+
+
 }
+
+

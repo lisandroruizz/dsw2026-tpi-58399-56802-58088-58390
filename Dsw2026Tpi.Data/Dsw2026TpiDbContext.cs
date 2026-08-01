@@ -15,6 +15,7 @@ public class Dsw2026TpiDbContext: DbContext
     public DbSet<Doctor> Doctors => Set<Doctor>();
     public DbSet<Patient> Patients => Set<Patient>(); 
     public DbSet<Availability> Availabilities => Set<Availability>();
+    public DbSet<Appointment> Appointments => Set<Appointment>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
