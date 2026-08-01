@@ -4,6 +4,7 @@
 @specialityId = 00000000-0000-0000-0000-000000000000
 @doctorId = 00000000-0000-0000-0000-000000000000
 @availabilityId = 00000000-0000-0000-0000-000000000000
+@appointmentId = 00000000-0000-0000-0000-000000000000
 
 ### Login administrador
 POST {{host}}/api/auth/admin/login
@@ -29,7 +30,9 @@ GET {{Dsw2026Tpi.Api_HostAddress}}/health-check
 Accept: application/json
 
 ### Crear especialidad
-POST {{host}}/api/specialties Authorization: Bearer {{adminToken}} Content-Type: application/json 
+POST {{host}}/api/specialties
+Authorization: Bearer {{adminToken}} 
+Content-Type: application/json 
 { 
   "name": "Cardiología",
   "description": "Atención y control cardiovascular"
@@ -67,3 +70,31 @@ Content-Type: application/json
 ### Consultar slots libres
 GET {{host}}/api/availabilities?doctorId={{doctorId}}
 Authorization: Bearer {{patientToken}}
+
+
+
+### Reservar cita
+POST {{host}}/api/appointments
+Authorization: Bearer {{patientToken}}
+Content-Type: application/json
+
+{
+  "doctorId": "{{doctorId}}",
+  "availabilityId": "{{availabilityId}}",
+  "patient": {
+    "dni": 12345678
+  },
+  "reason": "Control médico general"
+}
+
+### Turnos activos del paciente
+GET {{host}}/api/appointments/patient?dni=12345678
+Authorization: Bearer {{patientToken}}
+
+### Cancelar cita
+DELETE {{host}}/api/appointments/{{appointmentId}}
+Authorization: Bearer {{patientToken}}
+
+### Búsqueda avanzada
+GET {{host}}/api/appointments/search?pageSize=10&pageIndex=0&doctorId={{doctorId}}
+Authorization: Bearer {{adminToken}}
