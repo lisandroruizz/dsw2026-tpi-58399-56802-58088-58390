@@ -200,7 +200,7 @@ error.Description)));
         List<(string Field, string Issue)> errors = [];
         if (!request.Email.IsEmailValid())
         {
-            errors.Add(("email", "email_ivalido"));
+            errors.Add(("email", "email_invalido"));
         }
         if (string.IsNullOrWhiteSpace(request.Password) || request.Password.Length < 8)
         {

@@ -16,7 +16,7 @@ public class JwtService
 
     public string GenerateToken(string userId, string email, string role, long? dni = null)
     {
-        IConfigurationSection jwtConfig = _configuration.GetSection("jxt");
+        IConfigurationSection jwtConfig = _configuration.GetSection("Jwt");
         string keyText = jwtConfig["Key"] ?? throw new InvalidOperationException("jwt Key no configurada");
         string issuer = jwtConfig["Issuer"] ?? throw new InvalidOperationException("jwt Issuer no configurado");
         string audience = jwtConfig["Audience"] ?? throw new InvalidOperationException("jwt Audience no configurado");
