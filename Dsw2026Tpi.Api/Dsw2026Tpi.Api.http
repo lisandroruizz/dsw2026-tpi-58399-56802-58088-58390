@@ -1,8 +1,28 @@
-@Dsw2026Tpi.Api_HostAddress = https://localhost:7001
-@accessToken = 
+@host = http://localhost:5278
+@adminToken = REEMPLAZAR_TOKEN_ADMIN
+@patientToken = REEMPLAZAR_TOKEN_PACIENTE
 @specialityId = 00000000-0000-0000-0000-000000000000
 @doctorId = 00000000-0000-0000-0000-000000000000
 @availabilityId = 00000000-0000-0000-0000-000000000000
+
+### Login administrador
+POST {{host}}/api/auth/admin/login
+Content-Type: application/json
+{
+    "email": "admin@system.com",
+    "password": "Admin123!"
+}
+
+### Login paciente 
+POST {{host}}/api/auth/patient/login
+Content-Type: application/json
+{
+    "email": "paciente@mail.com", 
+    "dni": 12345678
+
+}
+
+
 
 ### Health Check
 GET {{Dsw2026Tpi.Api_HostAddress}}/health-check
