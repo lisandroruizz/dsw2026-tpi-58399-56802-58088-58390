@@ -70,7 +70,16 @@ public class AppointmentService : IAppointmentService
 
         await _persistence.Update(availability);
         await _persistence.Add(appointment);
-        await _persistence.SaveChanges();
+
+        bool saved = await _persistence.TrySaveChanges();
+        if (!saved) 
+        {
+            throw new ConflictException(
+                ErrorCodeNames.AppointmentConflict,
+                "El turno fue reservado por otro paciente.")
+                .WithDetail("availabilityId", "slot_unavailable");
+        }
+         
 
         _logger.LogInformation(
             "El paciente {Dni} reservó la cita {AppointmentId} para el médico {DoctorId}",
@@ -141,9 +150,17 @@ public class AppointmentService : IAppointmentService
         appointment.Cancel();
         appointment.Availability.Release();
 
-        await _persistence.Update(appointment);
-        await _persistence.Update(appointment.Availability);
-        await _persistence.SaveChanges();
+        await _persistence.Update(appointment); 
+        await _persistence.Update(appointment.Availability); 
+
+        bool saved = await _persistence.TrySaveChanges();
+        if (!saved) 
+        { 
+            throw new ConflictException(
+                ErrorCodeNames.AppointmentConflict,
+                "No fue posible cancelar la cita por un conflicto de concurrencia.");
+        }
+        
 
         _logger.LogInformation(
             "El paciente {Dni} canceló la cita {AppointmentId}",
