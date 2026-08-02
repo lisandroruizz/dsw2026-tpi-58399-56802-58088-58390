@@ -20,6 +20,10 @@ public class AppointmentConfiguration : IEntityTypeConfiguration<Appointment> {
         builder.Property(x => x.Status).HasConversion<string>().HasMaxLength(20).IsRequired(); 
         builder.Property(x => x.CancelledAt).HasColumnType("datetime2"); 
         builder.Property(x => x.Deleted).IsRequired().HasDefaultValue(false);
+        builder.HasIndex(x => x.AvailabilityId)
+            .IsUnique()
+            .HasDatabaseName("UX_Appointments_ActiveAvailability")
+            .HasFilter("[Deleted] = 0 AND [Status] <> 'Cancelled'");
 
         builder.HasIndex(x => new { x.PatientId, x.Status });
         builder.HasQueryFilter(x => !x.Deleted); 
