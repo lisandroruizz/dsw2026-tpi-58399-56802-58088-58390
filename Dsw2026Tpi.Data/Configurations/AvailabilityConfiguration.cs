@@ -21,7 +21,17 @@ namespace Dsw2026Tpi.Data.Configurations
             builder.Property(x => x.EndTime).HasColumnType("time(0)").IsRequired();
             builder.Property(x => x.Status).HasConversion<string>().HasMaxLength(20).IsRequired();
             builder.Property(x => x.Deleted).IsRequired().HasDefaultValue(false);
-            
+            builder.Property<byte[]>("RowVersion")
+                .IsRowVersion();
+            builder.HasIndex(x => new { 
+                x.DoctorId,
+                x.Date,
+                x.StartTime 
+            })
+                .IsUnique()
+                .HasDatabaseName("UX_Availabilities_Doctor_Date_StartTime")
+                .HasFilter("[Deleted] = 0");
+
             builder.HasIndex(x => new { x.DoctorId, x.Date, x.Status });
             builder.HasQueryFilter(x => !x.Deleted);
 
