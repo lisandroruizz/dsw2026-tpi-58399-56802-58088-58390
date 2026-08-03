@@ -28,6 +28,7 @@ public class Program
             builder.Services.AddSwaggerConfiguration();
             builder.Services.AddApplicationPersistence(builder.Configuration);
             builder.Services.AddAppCors(builder.Configuration);
+            builder.Services.AddAppRateLimiting();
             builder.Services.AddAppDependencies();
             builder.Services.AddAppControllers();
             builder.Services.AddHealthChecks();

@@ -1,9 +1,13 @@
 ﻿using Dsw2026Tpi.CrossCutting.Identity;
+using Dsw2026Tpi.CrossCutting.Models;
+using Dsw2026Tpi.CrossCutting.Resources;
 using Dsw2026Tpi.Data.Identity;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
+using System.Threading.RateLimiting;
 
 namespace Dsw2026Tpi.Api.Configurations;
 
@@ -100,6 +104,44 @@ public static class SecurityConfigurationExtensions
           .AddEntityFrameworkStores<AuthenticationDbContext>()
           .AddSignInManager()
           .AddDefaultTokenProviders();
+        return services;
+    }
+
+    public static IServiceCollection AddAppRateLimiting(this IServiceCollection services)
+    {
+        services.AddRateLimiter(options =>
+        {
+            options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+
+            options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(context =>
+                RateLimitPartition.GetFixedWindowLimiter(
+                    context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                    _ => new FixedWindowRateLimiterOptions
+                    {
+                        PermitLimit = 100,
+                        Window = TimeSpan.FromMinutes(1),
+                        QueueLimit = 0,
+                        AutoReplenishment = true
+                    }));
+
+            options.AddFixedWindowLimiter("login", limiter =>
+            {
+                limiter.PermitLimit = 5;
+                limiter.Window = TimeSpan.FromMinutes(1);
+                limiter.QueueLimit = 0;
+                limiter.AutoReplenishment = true;
+            });
+
+            options.OnRejected = async (context, cancellationToken) =>
+            {
+                await context.HttpContext.Response.WriteAsJsonAsync(
+                    //new ErrorResponse(
+                        //ErrorCodeNames.RateLimitExceeded,
+                       // "Se excedió la cantidad permitida de solicitudes."),
+                    cancellationToken);
+            };
+        });
+
         return services;
     }
 }
