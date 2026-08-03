@@ -1,9 +1,14 @@
 ﻿using Dsw2026Tpi.CrossCutting.Identity;
+using Dsw2026Tpi.CrossCutting.Models;
+using Dsw2026Tpi.CrossCutting.Resources;
 using Dsw2026Tpi.Data.Identity;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
+using System.Threading.RateLimiting;
 
 namespace Dsw2026Tpi.Api.Configurations;
 
@@ -36,14 +41,29 @@ public static class SecurityConfigurationExtensions
                     ValidateIssuerSigningKey = true,
                     ValidIssuer = issuer,
                     ValidAudience = audience,
-                    IssuerSigningKey = new SymmetricSecurityKey(key)
+                    IssuerSigningKey = new SymmetricSecurityKey(key),
+                    ClockSkew = TimeSpan.FromMinutes(1)
                 };
+
+                options.Events = new JwtBearerEvents
+                {
+                    OnChallenge = async context =>
+                    {
+                        context.HandleResponse();
+                        context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                        await context.Response.WriteAsJsonAsync(new ErrorResponse(
+                            "AUTHENTICATION_FAILED", "Se requiere autenticación para acceder al recurso."));
+                    },
+                    OnForbidden = async context =>
+                    {
+                        context.Response.StatusCode = StatusCodes.Status403Forbidden;
+                        await context.Response.WriteAsJsonAsync(new ErrorResponse(
+                            "AUTHORIZATION_FAILED","No posee permisos para realizar la operación."));
+                    }
+                };
+
             });
-        services.AddAuthorizationBuilder()
-            .AddPolicy(Policies.AdminPolicy, policy =>
-                policy.RequireRole(Roles.Administrator))
-            .AddPolicy(Policies.PatientPolicy, policy =>
-                policy.RequireRole(Roles.Patient));
+
         return services;
     }
 
@@ -89,16 +109,55 @@ public static class SecurityConfigurationExtensions
         {
             options.Password = new PasswordOptions
             {
-                RequiredLength = 6,
+                RequiredLength = 8,
                 RequireLowercase = true,
                 RequireUppercase = true,
-                RequireDigit = true
+                RequireDigit = true,
+                RequireNonAlphanumeric = false
             };
 
         }).AddRoles<IdentityRole>()
           .AddEntityFrameworkStores<AuthenticationDbContext>()
           .AddSignInManager()
           .AddDefaultTokenProviders();
+        return services;
+    }
+
+    public static IServiceCollection AddAppRateLimiting(this IServiceCollection services)
+    {
+        services.AddRateLimiter(options =>
+        {
+            options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+
+            options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(context =>
+                RateLimitPartition.GetFixedWindowLimiter(
+                    context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                    _ => new FixedWindowRateLimiterOptions
+                    {
+                        PermitLimit = 100,
+                        Window = TimeSpan.FromMinutes(1),
+                        QueueLimit = 0,
+                        AutoReplenishment = true
+                    }));
+
+            options.AddFixedWindowLimiter("login", limiter =>
+            {
+                limiter.PermitLimit = 5;
+                limiter.Window = TimeSpan.FromMinutes(1);
+                limiter.QueueLimit = 0;
+                limiter.AutoReplenishment = true;
+            });
+
+            options.OnRejected = async (context, cancellationToken) =>
+            {
+                await context.HttpContext.Response.WriteAsJsonAsync(
+                    new ErrorResponse(
+                       "RATE_LIMIT_EXCEEDED",
+                       "Se excedió la cantidad permitida de solicitudes."),
+                    cancellationToken);
+            };
+        });
+
         return services;
     }
 }

@@ -2,7 +2,8 @@
 using Dsw2026Tpi.Application.Interfaces;
 using Microsoft.AspNetCore.Mvc;
 using Dsw2026Tpi.CrossCutting.Identity;
-using Microsoft.AspNetCore.Authorization; 
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace Dsw2026Tpi.Api.Controllers;
 
@@ -18,6 +19,7 @@ public class AuthenticationController : AppController
 
 
     [AllowAnonymous]
+    [EnableRateLimiting("login")]
     [HttpPost("admin/login")]
     [ProducesResponseType(typeof(LoginAdminModel.Response), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -32,6 +34,7 @@ public class AuthenticationController : AppController
 
 
     [AllowAnonymous]
+    [EnableRateLimiting("login")]
     [HttpPost("patient/login")]
     [ProducesResponseType(typeof(LoginPatientModel.Response), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]

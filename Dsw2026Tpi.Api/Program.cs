@@ -2,6 +2,7 @@ using Dsw2026Tpi.Api.Configurations;
 using Dsw2026Tpi.Api.Middlewares;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Dsw2026Tpi.CrossCutting.Identity;
 using Serilog;
 
 namespace Dsw2026Tpi.Api;
@@ -28,12 +29,14 @@ public class Program
             builder.Services.AddSwaggerConfiguration();
             builder.Services.AddApplicationPersistence(builder.Configuration);
             builder.Services.AddAppCors(builder.Configuration);
+            builder.Services.AddAppRateLimiting();
             builder.Services.AddAppDependencies();
             builder.Services.AddAppControllers();
             builder.Services.AddHealthChecks();
 
             var app = builder.Build();
 
+            app.UseMiddleware<ExceptionHandlingMiddleware>();
             app.UseSerilogRequestLogging();
 
             if (app.Environment.IsProduction())
@@ -46,13 +49,13 @@ public class Program
                 app.UseSwaggerUI();
             }
 
+            app.UseCors();
+            app.UseRateLimiter();  
             app.UseAuthentication();
             app.UseAuthorization();
-            app.UseCors();
-            app.UseMiddleware<ExceptionHandlingMiddleware>();
 
             app.MapControllers();
-            app.MapHealthChecks("/health-check");
+            app.MapHealthChecks("/health-check").RequireAuthorization(Policies.AdminPolicy);
 
             Log.Information("Aplicación iniciada correctamente");
 
