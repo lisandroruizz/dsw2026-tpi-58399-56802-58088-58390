@@ -12,8 +12,11 @@ public interface IAppointmentService
     Task<IReadOnlyCollection<AppointmentModel.Response>> GetPatientActive(long dni, long authenticatedDni);
     Task Cancel(Guid id, long authenticatedDni);
 
-    Task<IReadOnlyCollection<AppointmentModel.Response>> GetByDate(DateOnly date);
-    Task<Pagination<AppointmentModel.Response>> Search(
+    Task<Pagination<AppointmentModel.AdminResponse>>GetByDate(
+           int pageSize,
+           int pageIndex,
+           DateOnly date);
+    Task<Pagination<AppointmentModel.AdminResponse>> Search(
         int pageSize,
         int pageIndex,
         Guid? specialityId, 

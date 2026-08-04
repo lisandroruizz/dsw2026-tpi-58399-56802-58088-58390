@@ -39,12 +39,12 @@ public class AppointmentService : IAppointmentService
         Patient patient = await _persistence.First<Patient>(x => x.Dni == request.Patient.Dni)
             ?? throw new EntityNotFoundException(ErrorCodeNames.PatientNotFound, "Paciente");
 
-        Availability availability = await _persistence.GetById<Availability>(
-            request.AvailabilityId,
+        AvailabilitySlot slot = await _persistence.GetById<AvailabilitySlot>(
+            request.AvailabilitySlotId,
             "Doctor.Speciality")
             ?? throw new EntityNotFoundException(ErrorCodeNames.AvailabilityNotFound, "Disponibilidad");
 
-        if (availability.DoctorId != doctor.Id)
+        if (slot.DoctorId != doctor.Id)
         {
             throw new ValidationException(
             [
@@ -52,8 +52,8 @@ public class AppointmentService : IAppointmentService
             ]);
         }
 
-        if (availability.Status != AvailabilityStatus.Available ||
-            availability.GetStartDateTime() <= DateTime.Now)
+        if (slot.Status != AvailabilityStatus.Available ||
+            slot.GetStartDateTime() <= DateTime.Now)
         {
             throw new ConflictException(
                 ErrorCodeNames.AppointmentConflict,
@@ -61,14 +61,14 @@ public class AppointmentService : IAppointmentService
                 .WithDetail("availabilityId", "slot_unavailable");
         }
 
-        availability.Reserve();
+        slot.Book();
 
         var appointment = new Appointment(
-            availability,
+            slot,
             patient,
             request.Reason!);
 
-        await _persistence.Update(availability);
+        await _persistence.Update(slot);
         await _persistence.Add(appointment);
 
         bool saved = await _persistence.TrySaveChanges();
@@ -87,7 +87,7 @@ public class AppointmentService : IAppointmentService
             appointment.Id,
             doctor.Id);
 
-        return Map(appointment);
+        return MapResponse(appointment);
     }
 
     public async Task<IReadOnlyCollection<AppointmentModel.Response>> GetPatientActive(
@@ -113,16 +113,16 @@ public class AppointmentService : IAppointmentService
         var appointments = await _persistence.GetFiltered<Appointment>(
             appointment => appointment.Patient.Dni == dni &&
                            appointment.Status == AppointmentStatus.Booked &&
-                           (appointment.Availability.Date > today ||
-                           (appointment.Availability.Date == today &&
-                            appointment.Availability.StartTime > currentTime)),
+                           (appointment.AvailabilitySlot.SlotDate > today ||
+                           (appointment.AvailabilitySlot.SlotDate == today &&
+                            appointment.AvailabilitySlot.StartTime > currentTime)),
             AppointmentIncludes,
             nameof(Appointment.Patient));
 
         return appointments
-            .OrderBy(x => x.Availability.Date)
-            .ThenBy(x => x.Availability.StartTime)
-            .Select(Map)
+            .OrderBy(x => x.AvailabilitySlot.SlotDate)
+            .ThenBy(x => x.AvailabilitySlot.StartTime)
+            .Select(MapResponse)
             .ToArray();
     }
 
@@ -130,7 +130,7 @@ public class AppointmentService : IAppointmentService
     {
         Appointment appointment = await _persistence.GetById<Appointment>(
             id,
-            nameof(Appointment.Availability),
+            nameof(Appointment.AvailabilitySlot),
             nameof(Appointment.Patient))
             ?? throw new EntityNotFoundException(ErrorCodeNames.AppointmentNotFound, "Cita");
 
@@ -140,7 +140,7 @@ public class AppointmentService : IAppointmentService
         }
 
         if (appointment.Status != AppointmentStatus.Booked ||
-            appointment.Availability.Status != AvailabilityStatus.Reserved)
+            appointment.AvailabilitySlot.Status != AvailabilityStatus.Booked)
         {
             throw new ConflictException(
                 ErrorCodeNames.AppointmentInvalidState,
@@ -148,10 +148,10 @@ public class AppointmentService : IAppointmentService
         }
 
         appointment.Cancel();
-        appointment.Availability.Release();
+        appointment.AvailabilitySlot.Release();
 
         await _persistence.Update(appointment); 
-        await _persistence.Update(appointment.Availability); 
+        await _persistence.Update(appointment.AvailabilitySlot); 
 
         bool saved = await _persistence.TrySaveChanges();
         if (!saved) 
@@ -168,20 +168,36 @@ public class AppointmentService : IAppointmentService
             appointment.Id);
     }
 
-    public async Task<IReadOnlyCollection<AppointmentModel.Response>> GetByDate(DateOnly date)
+    public async Task<Pagination<AppointmentModel.AdminResponse>> GetByDate(
+        int pageSize,
+        int pageIndex,
+        DateOnly date)
     {
-        var appointments = await _persistence.GetFiltered<Appointment>(
-            appointment => appointment.Availability.Date == date,
+        ServiceValidation.ValidatePagination(pageSize, pageIndex);
+
+        if (date == DateOnly.MinValue)
+        {
+            throw new ValidationException([("date", "required")]);
+        }
+
+        Pagination<Appointment> appointments = await _persistence.Paginate<Appointment, TimeOnly>(
+            pageSize,
+            pageIndex,
+            appointment => appointment.AvailabilitySlot.SlotDate == date,
+            appointment => appointment.AvailabilitySlot.StartTime,
             AppointmentIncludes,
             nameof(Appointment.Patient));
 
-        return appointments
-            .OrderBy(x => x.Availability.StartTime)
-            .Select(Map)
-            .ToArray();
+        _logger.LogInformation(
+            "Consulta administrativa de citas para la fecha {Date}. Página {PageIndex}, tamaño {PageSize}",
+            date,
+            pageIndex,
+            pageSize);
+
+        return appointments.Map(MapAdminResponse);
     }
 
-    public async Task<Pagination<AppointmentModel.Response>> Search(
+    public async Task<Pagination<AppointmentModel.AdminResponse>> Search(
         int pageSize,
         int pageIndex,
         Guid? specialityId,
@@ -199,15 +215,12 @@ public class AppointmentService : IAppointmentService
             ]);
         }
 
-        var appointments = await _persistence.Paginate<Appointment, DateOnly>(
-            pageSize,
-            pageIndex,
-            appointment =>
-                (!specialityId.HasValue || appointment.Availability.Doctor.SpecialityId == specialityId.Value) &&
-                (!doctorId.HasValue || appointment.Availability.DoctorId == doctorId.Value) &&
+        var appointments = await _persistence.Paginate<Appointment, DateOnly>(pageSize, pageIndex, appointment =>
+                (!specialityId.HasValue || appointment.AvailabilitySlot.Doctor.SpecialityId == specialityId.Value) &&
+                (!doctorId.HasValue || appointment.AvailabilitySlot.DoctorId == doctorId.Value) &&
                 (!dni.HasValue || appointment.Patient.Dni == dni.Value) &&
-                (!date.HasValue || appointment.Availability.Date == date.Value),
-            appointment => appointment.Availability.Date,
+                (!date.HasValue || appointment.AvailabilitySlot.SlotDate == date.Value),
+            appointment => appointment.AvailabilitySlot.SlotDate,
             AppointmentIncludes,
             nameof(Appointment.Patient));
 
@@ -215,10 +228,12 @@ public class AppointmentService : IAppointmentService
             "Búsqueda avanzada de citas ejecutada. Especialidad: {SpecialityId}, Médico: {DoctorId}, DNI: {Dni}, Fecha: {Date}",
             specialityId,
             doctorId,
-            dni,
-            date);
+            dni.HasValue,
+            date,
+            pageIndex,
+            pageSize);
 
-        return appointments.Map(Map);
+        return appointments.Map(MapAdminResponse);
     }
 
     private static void ValidateCreate(AppointmentModel.Request request)
@@ -230,7 +245,7 @@ public class AppointmentService : IAppointmentService
             errors.Add(("doctorId", "required"));
         }
 
-        if (request.AvailabilityId == Guid.Empty)
+        if (request.AvailabilitySlotId == Guid.Empty)
         {
             errors.Add(("availabilityId", "required"));
         }
@@ -252,10 +267,10 @@ public class AppointmentService : IAppointmentService
         ServiceValidation.ThrowIfAny(errors);
     }
 
-    private static AppointmentModel.Response Map(Appointment appointment)
+    private static AppointmentModel.Response MapResponse(Appointment appointment)
     {
-        Availability availability = appointment.Availability;
-        Doctor doctor = availability.Doctor;
+        AvailabilitySlot slot = appointment.AvailabilitySlot;
+        Doctor doctor = slot.Doctor;
         string specialityName = doctor.Speciality?.Name ?? string.Empty;
         long dni = appointment.Patient?.Dni ?? 0;
 
@@ -264,11 +279,28 @@ public class AppointmentService : IAppointmentService
             specialityName,
             doctor.Name,
             dni,
-            availability.Date,
-            availability.StartTime.ToString("HH:mm"),
-            availability.EndTime.ToString("HH:mm"),
+            slot.SlotDate,
+            slot.StartTime.ToString("HH:mm"),
+            slot.EndTime.ToString("HH:mm"),
             StatusName(appointment.Status),
             appointment.Reason);
+    }
+
+    private static AppointmentModel.AdminResponse MapAdminResponse(Appointment appointment)
+    {
+        AvailabilitySlot slot = appointment.AvailabilitySlot;
+        Doctor doctor = slot.Doctor;
+        Speciality speciality = doctor.Speciality;
+        Patient patient = appointment.Patient;
+
+        return new AppointmentModel.AdminResponse(
+            appointment.Id,
+            StatusName(appointment.Status),
+            new AppointmentModel.PatientSummary(patient.Dni, patient.FullName ?? string.Empty),
+            new AppointmentModel.DoctorSummary(
+                doctor.Id,
+                doctor.Name,
+                new AppointmentModel.SpecialtySummary(speciality.Id, speciality.Name)));
     }
 
     private static string StatusName(AppointmentStatus status) => status switch

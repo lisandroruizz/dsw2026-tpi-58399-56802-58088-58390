@@ -29,7 +29,7 @@ public class Program
             builder.Services.AddSwaggerConfiguration();
             builder.Services.AddApplicationPersistence(builder.Configuration);
             builder.Services.AddAppCors(builder.Configuration);
-            builder.Services.AddAppRateLimiting();
+            builder.Services.AddAppRateLimiting(builder.Configuration);
             builder.Services.AddAppDependencies();
             builder.Services.AddAppControllers();
             builder.Services.AddHealthChecks();
@@ -50,8 +50,8 @@ public class Program
             }
 
             app.UseCors();
-            app.UseRateLimiter();  
             app.UseAuthentication();
+            app.UseRateLimiter();
             app.UseAuthorization();
 
             app.MapControllers();

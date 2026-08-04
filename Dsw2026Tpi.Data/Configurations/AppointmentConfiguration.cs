@@ -14,23 +14,24 @@ public class AppointmentConfiguration : IEntityTypeConfiguration<Appointment> {
         builder.HasKey(x => x.Id);
 
         builder.Property(x => x.Id).ValueGeneratedNever();
-        builder.Property(x => x.AvailabilityId).IsRequired();
+        builder.Property(x => x.AvailabilitySlotId).IsRequired();
         builder.Property(x => x.PatientId).IsRequired(); 
-        builder.Property(x => x.Reason).IsRequired().HasMaxLength(500);
+        builder.Property(x => x.Reason).IsRequired().HasMaxLength(300);
         builder.Property(x => x.Status).HasConversion<string>().HasMaxLength(20).IsRequired(); 
-        builder.Property(x => x.CancelledAt).HasColumnType("datetime2"); 
+        builder.Property(x => x.CancelledAt).HasColumnType("datetime2");
+        builder.Property(appointment => appointment.AttendedAt).HasColumnType("datetime2");
         builder.Property(x => x.Deleted).IsRequired().HasDefaultValue(false);
-        builder.HasIndex(x => x.AvailabilityId)
+        builder.HasIndex(x => x.AvailabilitySlotId)
             .IsUnique()
-            .HasDatabaseName("UX_Appointments_ActiveAvailability")
+            .HasDatabaseName("UX_Appointments_ActiveAvailabilitySlot")
             .HasFilter("[Deleted] = 0 AND [Status] <> 'Cancelled'");
 
-        builder.HasIndex(x => new { x.PatientId, x.Status });
-        builder.HasQueryFilter(x => !x.Deleted); 
+        builder.HasIndex(appointment => new { appointment.PatientId, appointment.Status });
+        builder.HasQueryFilter(appointment => !appointment.Deleted); 
 
-        builder.HasOne(x => x.Availability)
+        builder.HasOne(appointment => appointment.AvailabilitySlot)
             .WithMany(x => x.Appointments)
-            .HasForeignKey(x => x.AvailabilityId)
+            .HasForeignKey(x => x.AvailabilitySlotId)
             .OnDelete(DeleteBehavior.Restrict); 
         
         builder.HasOne(x => x.Patient)

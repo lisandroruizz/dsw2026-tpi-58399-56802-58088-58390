@@ -74,6 +74,6 @@ public class ExceptionHandlingMiddleware
 
             JsonSerializer.Serialize(error, JsonOptions)
 
-                                         );
+         );
     }
 }

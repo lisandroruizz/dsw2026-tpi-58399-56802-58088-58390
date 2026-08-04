@@ -26,21 +26,34 @@ namespace Dsw2026Tpi.Application.Services
             ServiceValidation.ValidateOptionalName(name);
 
             string? filter = string.IsNullOrWhiteSpace(name) ? null : name.Trim();
-            var specialities = await _persistence.Paginate<Speciality, string>
-                (
-            pageSize,
-            pageIndex,
-            speciality => filter == null || speciality.Name.Contains(filter),
-            speciality => speciality.Name);
+            Pagination<Speciality> specialities = await _persistence.Paginate<Speciality, string>(
+                      pageSize,
+                      pageIndex,
+                      speciality => filter == null || speciality.Name.Contains(filter),
+                      speciality => speciality.Name);
+
             return specialities.Map(Map);
         }
 
         public async Task<SpecialityModel.Response> Create(SpecialityModel.Request request)
         {
             Validate(request);
-            var speciality = new Speciality(request.Name!, request.Description!);
+
+            string name = request.Name!.Trim();
+
+            await EnsureNameIsAvailable(name);
+
+            var speciality = new Speciality(name, request.Description!);
+
             await _persistence.Add(speciality);
-            await _persistence.SaveChanges();
+
+            bool saved = await _persistence.TrySaveChanges();
+
+            if (!saved)
+            {
+                throw NameConflict();
+            }
+
             return Map(speciality);
         }
 
@@ -49,9 +62,17 @@ namespace Dsw2026Tpi.Application.Services
          Validate(request);
             Speciality speciality = await _persistence.GetById<Speciality>(id)
          ?? throw new EntityNotFoundException( "Especialidad");
-            speciality.Update(request.Name!, request.Description!);
+            string name = request.Name!.Trim();
+            await EnsureNameIsAvailable(name, id);
+            speciality.Update(name, request.Description!);
             await _persistence.Update(speciality);
-            await _persistence.SaveChanges();
+            bool saved = await _persistence.TrySaveChanges();
+
+            if (!saved)
+            {
+                throw NameConflict();
+            }
+
             return Map(speciality);
         }
 
@@ -61,6 +82,28 @@ namespace Dsw2026Tpi.Application.Services
             ?? throw new EntityNotFoundException( "Especialidad");
             await _persistence.Delete(speciality);
             await _persistence.SaveChanges();
+        }
+
+        private async Task EnsureNameIsAvailable(string name, Guid? excludedId = null)
+        {
+            Speciality? existing = await _persistence.First<Speciality>(
+                speciality => speciality.Name == name && (!excludedId.HasValue || speciality.Id != excludedId.Value));
+
+            if (existing is not null)
+            {
+                throw NameConflict();
+            }
+        }
+
+        private static ConflictException NameConflict()
+        {
+            var exception = new ConflictException(
+                ErrorCodeNames.SpecialityNameConflict,
+                "Ya existe una especialidad activa con ese nombre.");
+
+            exception.WithDetail("name", "already_exists");
+
+            return exception;
         }
 
         private static void Validate(SpecialityModel.Request request)

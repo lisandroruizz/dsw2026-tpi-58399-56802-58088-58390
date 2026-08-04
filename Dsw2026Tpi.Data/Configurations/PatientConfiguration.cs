@@ -19,7 +19,7 @@ internal class PatientConfiguration : IEntityTypeConfiguration<Patient>
         builder.Property(x => x.Dni).IsRequired();
         builder.Property(x => x.Email).IsRequired().HasMaxLength(256);
         builder.Property(x => x.ApplicationUserId).IsRequired().HasMaxLength(450);
-        builder.Property(x => x.Name).HasMaxLength(100);
+        builder.Property(x => x.FullName).HasMaxLength(100);
         builder.Property(x => x.Phone).HasMaxLength(30);
         builder.Property(x => x.Deleted).IsRequired().HasDefaultValue(false);
 

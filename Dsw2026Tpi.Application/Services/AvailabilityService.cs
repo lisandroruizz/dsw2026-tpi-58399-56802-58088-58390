@@ -1,6 +1,7 @@
 ﻿using Dsw2026Tpi.Application.Dtos;
 using Dsw2026Tpi.Application.Interfaces;
 using Dsw2026Tpi.CrossCutting.Exceptions;
+using Dsw2026Tpi.CrossCutting.Resources;
 using Dsw2026Tpi.Domain.Entities;
 using Dsw2026Tpi.Domain.Enums;
 using Dsw2026Tpi.Domain.Interfaces;
@@ -16,20 +17,22 @@ namespace Dsw2026Tpi.Application.Services
     {
         private readonly IPersistence _persistence;
         private readonly ILogger<AvailabilityService> _logger;
+        private readonly INonWorkingDayProvider _nonWorkingDayProvider;
         private const string CodigoSuperposicionDisponibilidad = "AVAILABILITY_OVERLAP";
 
-        public AvailabilityService(IPersistence persistence, ILogger<AvailabilityService> logger)
+        public AvailabilityService(IPersistence persistence, ILogger<AvailabilityService> logger, INonWorkingDayProvider nonWorkingDayProvider)
         {
             _persistence = persistence;
             _logger = logger;
+            _nonWorkingDayProvider = nonWorkingDayProvider;
         }
 
-        public Task<IReadOnlyCollection<AvailabilityModel.SlotResponse>> Create(AvailabilityModel.Request request)
+        public Task<AvailabilityModel.Response> Create(AvailabilityModel.Request request)
         {
             return GuardarCronogramaMensual(request, overwrite: false);
         }
 
-        public Task<IReadOnlyCollection<AvailabilityModel.SlotResponse>> Update(AvailabilityModel.Request request)
+        public Task<AvailabilityModel.Response> Update(AvailabilityModel.Request request)
         {
             return GuardarCronogramaMensual(request, overwrite: true);
         }
@@ -39,7 +42,8 @@ namespace Dsw2026Tpi.Application.Services
             DateOnly? date = null)
         {
             _ = await _persistence.GetById<Doctor>(doctorId)
-                ?? throw new EntityNotFoundException("Médico");
+                ?? throw new EntityNotFoundException(ErrorCodeNames.DoctorNotFound,
+        "Médico");
 
             DateOnly hoy = DateOnly.FromDateTime(DateTime.Today);
             DateOnly ultimoDia = new DateOnly(hoy.Year, hoy.Month, 1).AddMonths(1).AddDays(-1);
@@ -47,120 +51,200 @@ namespace Dsw2026Tpi.Application.Services
             DateOnly hasta = date ?? ultimoDia;
             DateTime ahora = DateTime.Now;
 
-            var disponibilidades = await _persistence.GetFiltered<Availability>(
-                availability => availability.DoctorId == doctorId &&
-                                availability.Date >= desde &&
-                                availability.Date <= hasta &&
-                                availability.Status == AvailabilityStatus.Available);
+            IEnumerable<AvailabilitySlot> slots = await _persistence.GetFiltered<AvailabilitySlot>(
+                  slot =>
+                      slot.DoctorId == doctorId
+                      && slot.SlotDate >= desde
+                      && slot.SlotDate <= hasta
+                      && slot.Status == AvailabilityStatus.Available);
 
-            return disponibilidades
-                .Where(disponibilidad => disponibilidad.GetStartDateTime() > ahora)
-                .OrderBy(disponibilidad => disponibilidad.Date)
-                .ThenBy(disponibilidad => disponibilidad.StartTime)
-                .Select(Map)
+            return slots
+                .Where(slot => slot.GetStartDateTime() > ahora)
+                .OrderBy(slot => slot.SlotDate)
+                .ThenBy(slot => slot.StartTime)
+                .Select(MapSlot)
                 .ToArray();
         }
 
-        private async Task<IReadOnlyCollection<AvailabilityModel.SlotResponse>> GuardarCronogramaMensual(
+        private async Task<AvailabilityModel.Response> GuardarCronogramaMensual(
             AvailabilityModel.Request request,
             bool overwrite)
         {
             Doctor doctor = await _persistence.GetById<Doctor>(request.DoctorId)
-                ?? throw new EntityNotFoundException("Médico");
+                ?? throw new EntityNotFoundException(ErrorCodeNames.DoctorNotFound,
+        "Médico");
 
-            IReadOnlyCollection<ParsedDay> days = InterpretarYValidarDias(request.Days);
+            IReadOnlyCollection<ParsedDay> days = ParseAndValidateDays(request.Days);
 
             DateTime ahora = DateTime.Now;
             DateOnly hoy = DateOnly.FromDateTime(ahora);
+            DateOnly firstDay = new(hoy.Year, hoy.Month, 1);
             DateOnly ultimoDia = new DateOnly(hoy.Year, hoy.Month, 1).AddMonths(1).AddDays(-1);
 
-            var existente = (await _persistence.GetFiltered<Availability>(
-                    availability => availability.DoctorId == doctor.Id &&
-                                    availability.Date >= hoy &&
-                                    availability.Date <= ultimoDia))
-                .ToList();
+            List<AvailabilityRule> existingRules = (await _persistence.GetFiltered<AvailabilityRule>(
+                            rule => rule.DoctorId == doctor.Id && rule.Month == hoy.Month && rule.Year == hoy.Year)).ToList();
 
-            var bloquesDeseados = new List<(DateOnly Date, TimeOnly StartTime, TimeOnly EndTime)>();
+            List<AvailabilitySlot> existingSlots = (await _persistence.GetFiltered<AvailabilitySlot>(
+                    slot => slot.DoctorId == doctor.Id && slot.SlotDate >= firstDay && slot.SlotDate <= ultimoDia)).ToList();
+
+            var newRules = new List<AvailabilityRule>();
+            var rulesForGeneration = new List<AvailabilityRule>();
+
+            if (overwrite)
+            {
+                foreach (AvailabilitySlot slot in existingSlots)
+                {
+                    if (slot.Status == AvailabilityStatus.Booked)
+                    {
+                        slot.DetachFromRule();
+                        await _persistence.Update(slot);
+                    }
+                    else
+                    {
+                        await _persistence.Delete(slot);
+                    }
+                }
+
+                await _persistence.DeleteRange(existingRules);
+
+                foreach (ParsedDay day in days)
+                {
+                    var rule = new AvailabilityRule(doctor, hoy.Month, hoy.Year, day.Day, day.StartTime, day.EndTime);
+
+                    newRules.Add(rule);
+                    rulesForGeneration.Add(rule);
+                }
+            }
+            else
+            {
+                foreach (ParsedDay day in days)
+                {
+                    AvailabilityRule? exact = existingRules.FirstOrDefault(rule =>
+                        rule.DayOfWeek == day.Day && rule.StartTime == day.StartTime && rule.EndTime == day.EndTime);
+
+                    bool overlaps = existingRules.Any(rule =>
+                        rule.DayOfWeek == day.Day
+                        && day.StartTime < rule.EndTime
+                        && day.EndTime > rule.StartTime
+                        && rule != exact);
+
+                    if (overlaps)
+                    {
+                        throw new ConflictException(
+                                ErrorCodeNames.AvailabilityOverlap,
+                                "La disponibilidad se superpone con un horario ya configurado.")
+                            .WithDetail("days", "overlapping_schedule");
+                    }
+
+                    if (exact is not null)
+                    {
+                        rulesForGeneration.Add(exact);
+                    }
+                    else
+                    {
+                        var rule = new AvailabilityRule(
+                            doctor,
+                            hoy.Month,
+                            hoy.Year,
+                            day.Day,
+                            day.StartTime,
+                            day.EndTime);
+
+                        newRules.Add(rule);
+                        rulesForGeneration.Add(rule);
+                    }
+                }
+            }
+
+            var createdSlots = new List<AvailabilitySlot>();
+
+            IEnumerable<AvailabilitySlot> slotsThatRemain = overwrite
+                ? existingSlots.Where(slot => slot.Status == AvailabilityStatus.Booked)
+                : existingSlots;
 
             for (DateOnly date = hoy; date <= ultimoDia; date = date.AddDays(1))
             {
-                ParsedDay? configuredDay = days.FirstOrDefault(day => day.Day == date.DayOfWeek);
-                if (configuredDay is null)
+                if (_nonWorkingDayProvider.IsNonWorkingDay(date))
                 {
                     continue;
                 }
 
-                TimeOnly current = configuredDay.StartTime;
-                while (current < configuredDay.EndTime)
+                IEnumerable<AvailabilityRule> rulesForDate =
+                    rulesForGeneration.Where(rule => rule.DayOfWeek == date.DayOfWeek);
+                foreach (AvailabilityRule rule in rulesForDate)
                 {
-                    TimeOnly end = current.AddMinutes(30);
+                    TimeOnly current = rule.StartTime;
 
-                    if (date.ToDateTime(current) > ahora)
+                    while (current < rule.EndTime)
                     {
-                        bloquesDeseados.Add((date, current, end));
-                    }
+                        TimeOnly end = current.AddMinutes(30);
+                        bool isFuture = date.ToDateTime(current) > ahora;
 
-                    current = end;
+                        AvailabilitySlot? existingSlot = slotsThatRemain.FirstOrDefault(
+                            slot => slot.SlotDate == date && slot.StartTime == current);
+
+                        bool alreadyCreated = createdSlots.Any(
+                            slot => slot.SlotDate == date && slot.StartTime == current);
+
+                        if (isFuture
+                            && existingSlot is not null
+                            && existingSlot.AvailabilityRuleId is null
+                            && existingSlot.Status != AvailabilityStatus.Booked)
+                        {
+                            existingSlot.AttachToRule(rule);
+                            await _persistence.Update(existingSlot);
+                        }
+
+                        if (isFuture && existingSlot is null && !alreadyCreated)
+                        {
+                            createdSlots.Add(new AvailabilitySlot(rule, date, current, end));
+                        }
+
+                        current = end;
+                    }
                 }
             }
 
-            bool hasOverlap = bloquesDeseados.Any(slot => existente.Any(availability =>
-                availability.Date == slot.Date &&
-                slot.StartTime < availability.EndTime &&
-                slot.EndTime > availability.StartTime &&
-                slot.StartTime != availability.StartTime &&
-                (!overwrite || availability.Status == AvailabilityStatus.Reserved)));
-
-            if (hasOverlap)
-            {
-                throw new ConflictException(
-                        CodigoSuperposicionDisponibilidad,
-                        "La disponibilidad se superpone con un horario ya configurado.")
-                    .WithDetail("days", "overlapping_schedule");
-            }
-
-            if (overwrite)
-            {
-                var removable = existente
-                    .Where(availability =>
-                        availability.Status != AvailabilityStatus.Reserved &&
-                        !bloquesDeseados.Any(slot =>
-                            slot.Date == availability.Date &&
-                            slot.StartTime == availability.StartTime))
-                    .ToArray();
-
-                await _persistence.DeleteRange(removable);
-
-                existente = existente
-                    .Except(removable)
-                    .ToList();
-            }
-
-            var created = bloquesDeseados
-                .Where(slot => !existente.Any(availability =>
-                    availability.Date == slot.Date &&
-                    availability.StartTime == slot.StartTime))
-                .Select(slot => new Availability(
-                    doctor,
-                    slot.Date,
-                    slot.StartTime,
-                    slot.EndTime))
-                .ToList();
-
-            await _persistence.AddRange(created);
+            await _persistence.AddRange(newRules);
+            await _persistence.AddRange(createdSlots);
             await _persistence.SaveChanges();
 
             _logger.LogInformation(
                 overwrite
-                    ? "Se actualizó la disponibilidad mensual del médico {DoctorId}. Slots creados: {Count}"
-                    : "Se creó disponibilidad mensual para el médico {DoctorId}. Slots creados: {Count}",
+                    ? "Se reemplazó la disponibilidad mensual del médico {DoctorId}. Reglas: {RuleCount}. Slots nuevos: {SlotCount}"
+                    : "Se creó disponibilidad mensual para el médico {DoctorId}. Reglas nuevas: {RuleCount}. Slots nuevos: {SlotCount}",
                 doctor.Id,
-                created.Count);
+                newRules.Count,
+                createdSlots.Count);
 
-            return created.Select(Map).ToArray();
+            return await BuildResponse(doctor.Id, hoy.Month, hoy.Year, firstDay, ultimoDia);
         }
 
-        private static IReadOnlyCollection<ParsedDay> InterpretarYValidarDias(
+        private async Task<AvailabilityModel.Response> BuildResponse(
+            Guid doctorId,
+            int month,
+            int year,
+            DateOnly firstDay,
+            DateOnly lastDay)
+        {
+            IReadOnlyCollection<AvailabilityModel.ScheduleResponse> rules = (await _persistence
+                    .GetFiltered<AvailabilityRule>(rule => rule.DoctorId == doctorId && rule.Month == month && rule.Year == year))
+                .OrderBy(rule => DayOrder(rule.DayOfWeek))
+                .ThenBy(rule => rule.StartTime)
+                .Select(MapRule)
+                .ToArray();
+
+            IReadOnlyCollection<AvailabilityModel.SlotResponse> slots = (await _persistence
+                    .GetFiltered<AvailabilitySlot>(slot => slot.DoctorId == doctorId && slot.SlotDate >= firstDay && slot.SlotDate <= lastDay))
+                .OrderBy(slot => slot.SlotDate)
+                .ThenBy(slot => slot.StartTime)
+                .Select(MapSlot)
+                .ToArray();
+
+            return new AvailabilityModel.Response(doctorId, month, year, rules, slots);
+        }
+
+        private static IReadOnlyCollection<ParsedDay> ParseAndValidateDays(
             IReadOnlyCollection<AvailabilityModel.DayRequest>? requests)
         {
             List<(string Field, string Issue)> errors = [];
@@ -168,19 +252,22 @@ namespace Dsw2026Tpi.Application.Services
 
             if (requests is null || requests.Count == 0)
             {
-                throw new ValidationException().WithDetail("days", "required"); 
+                throw new ValidationException([("days", "required")]);
             }
 
             int index = 0;
+
             foreach (AvailabilityModel.DayRequest request in requests)
             {
                 DayOfWeek? day = ParseDay(request.Day);
+
                 bool startValid = TimeOnly.TryParseExact(
                     request.StartTime,
                     "HH:mm",
                     CultureInfo.InvariantCulture,
                     DateTimeStyles.None,
                     out TimeOnly startTime);
+
                 bool endValid = TimeOnly.TryParseExact(
                     request.EndTime,
                     "HH:mm",
@@ -209,13 +296,18 @@ namespace Dsw2026Tpi.Application.Services
                     {
                         errors.Add(($"days[{index}]", "startTime_must_be_before_endTime"));
                     }
+                    else if (!IsOnHalfHourGrid(startTime) || !IsOnHalfHourGrid(endTime))
+                    {
+                        errors.Add(($"days[{index}]", "times_must_use_00_or_30_minutes"));
+                    }
                     else if ((endTime.ToTimeSpan() - startTime.ToTimeSpan()).TotalMinutes % 30 != 0)
                     {
                         errors.Add(($"days[{index}]", "range_must_be_divisible_into_30_minute_slots"));
                     }
-                    else if (parsedDays.Any(existing => existing.Day == day.Value))
+                    else if (parsedDays.Any(existing =>
+                        existing.Day == day.Value && startTime < existing.EndTime && endTime > existing.StartTime))
                     {
-                        errors.Add(($"days[{index}].day", "overlapping_or_repeated_day"));
+                        errors.Add(($"days[{index}]", "overlapping_schedule"));
                     }
                     else
                     {
@@ -227,7 +319,13 @@ namespace Dsw2026Tpi.Application.Services
             }
 
             ServiceValidation.ThrowIfAny(errors);
+
             return parsedDays;
+        }
+
+        private static bool IsOnHalfHourGrid(TimeOnly time)
+        {
+            return time.Second == 0 && time.Millisecond == 0 && (time.Minute == 0 || time.Minute == 30);
         }
 
         private static DayOfWeek? ParseDay(string? value)
@@ -255,36 +353,59 @@ namespace Dsw2026Tpi.Application.Services
         private static string RemoveDiacritics(string value)
         {
             string normalized = value.Normalize(NormalizationForm.FormD);
+
             return new string(normalized
                 .Where(character => CharUnicodeInfo.GetUnicodeCategory(character) != UnicodeCategory.NonSpacingMark)
                 .ToArray());
         }
 
-        private static AvailabilityModel.SlotResponse Map(Availability availability)
+        private static AvailabilityModel.ScheduleResponse MapRule(AvailabilityRule rule)
         {
-            return new AvailabilityModel.SlotResponse(
-                availability.Id,
-                availability.DoctorId,
-                availability.Date,
-                DayName(availability.Date.DayOfWeek),
-                availability.StartTime.ToString("HH:mm"),
-                availability.EndTime.ToString("HH:mm"),
-                availability.Status.ToString().ToUpperInvariant());
+            return new AvailabilityModel.ScheduleResponse(
+                rule.Id,
+                DayName(rule.DayOfWeek),
+                rule.StartTime.ToString("HH:mm"),
+                rule.EndTime.ToString("HH:mm"));
         }
 
-        private static string DayName(DayOfWeek day) => day switch
+        private static AvailabilityModel.SlotResponse MapSlot(AvailabilitySlot slot)
         {
-            DayOfWeek.Monday => "LUNES",
-            DayOfWeek.Tuesday => "MARTES",
-            DayOfWeek.Wednesday => "MIÉRCOLES",
-            DayOfWeek.Thursday => "JUEVES",
-            DayOfWeek.Friday => "VIERNES",
-            DayOfWeek.Saturday => "SÁBADO",
-            DayOfWeek.Sunday => "DOMINGO",
-            _ => day.ToString().ToUpperInvariant()
-        };
+            return new AvailabilityModel.SlotResponse(
+                slot.Id,
+                slot.DoctorId,
+                slot.AvailabilityRuleId,
+                slot.SlotDate,
+                DayName(slot.SlotDate.DayOfWeek),
+                slot.StartTime.ToString("HH:mm"),
+                slot.EndTime.ToString("HH:mm"),
+                StatusName(slot.Status));
+        }
+
+        private static string StatusName(AvailabilityStatus status)
+        {
+            return status.ToString().ToUpperInvariant();
+        }
+
+        private static string DayName(DayOfWeek day)
+        {
+            return day switch
+            {
+                DayOfWeek.Monday => "LUNES",
+                DayOfWeek.Tuesday => "MARTES",
+                DayOfWeek.Wednesday => "MIÉRCOLES",
+                DayOfWeek.Thursday => "JUEVES",
+                DayOfWeek.Friday => "VIERNES",
+                DayOfWeek.Saturday => "SÁBADO",
+                DayOfWeek.Sunday => "DOMINGO",
+                _ => day.ToString().ToUpperInvariant()
+            };
+        }
+
+        private static int DayOrder(DayOfWeek day)
+        {
+            return day == DayOfWeek.Sunday ? 7 : (int)day;
+        }
 
         private sealed record ParsedDay(DayOfWeek Day, TimeOnly StartTime, TimeOnly EndTime);
     }
-
 }
