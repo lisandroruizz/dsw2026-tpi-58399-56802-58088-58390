@@ -41,18 +41,14 @@ internal static class ServiceValidation
         }
     }
 
-    public static void ThrowIfAny(IEnumerable<(string Field, string Issue)> errors)
+    public static void ThrowIfAny(
+      IEnumerable<(string Field, string Issue)> errors)
     {
         var errorList = errors.ToArray();
 
         if (errorList.Length == 0)
             return;
 
-        var message = string.Join("; ",
-            errorList.Select(e => $"{e.Field}: {e.Issue}"));
-
-        throw new ValidationException(
-            message,
-            nameof(ErrorCodes.VALIDATION_ERROR));
+        throw new ValidationException(errorList);
     }
 }

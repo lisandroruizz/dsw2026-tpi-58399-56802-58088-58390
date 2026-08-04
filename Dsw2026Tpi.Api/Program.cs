@@ -34,7 +34,23 @@ public class Program
             builder.Services.AddAppControllers();
             builder.Services.AddHealthChecks();
 
+            builder.Services.AddAuthorization(options =>
+            {
+                options.AddPolicy("AdminPolicy", policy =>
+                {
+                    policy.RequireAuthenticatedUser();
+                    policy.RequireRole(Roles.Administrator);
+                });
+
+                options.AddPolicy("PatientPolicy", policy =>
+                {
+                    policy.RequireAuthenticatedUser();
+                    policy.RequireRole(Roles.Patient);
+                });
+            });
+
             var app = builder.Build();
+            await app.InitializeIdentityAsync();
 
             app.UseMiddleware<ExceptionHandlingMiddleware>();
             app.UseSerilogRequestLogging();

@@ -26,21 +26,21 @@ public class ExceptionHandlingMiddleware
         }
         catch (Exception exception)
         {
-            if(exception is AppException)
+            if (exception is AppException)
             {
                 _logger.LogWarning(
-                    "Solicitud rechazada: {ExceptionType} - {Message}", exception.GetType().Name, exception.Message 
-                                  );
+                    "Solicitud rechazada: {ExceptionType} - {Message}",
+                    exception.GetType().Name,
+                    exception.Message);
             }
             else
             {
                 _logger.LogError(
                     exception,
-                    "Se produjo un error no controlado durante la solicitud"
-
-                                );
-                await HandleExceptionAsync(context, exception);
+                    "Se produjo un error no controlado durante la solicitud");
             }
+
+            await HandleExceptionAsync(context, exception);
         }
     }
 

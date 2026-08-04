@@ -12,7 +12,7 @@ namespace Dsw2026Tpi.Application.Services;
 
 public class AppointmentService : IAppointmentService
 {
-    private const string AppointmentIncludes = "Availability.Doctor.Speciality";
+    private const string AppointmentIncludes = "AvailabilitySlot.Doctor.Speciality";
     private readonly IPersistence _persistence;
     private readonly ILogger<AppointmentService> _logger;
 
@@ -110,14 +110,21 @@ public class AppointmentService : IAppointmentService
         DateOnly today = DateOnly.FromDateTime(DateTime.Today);
         TimeOnly currentTime = TimeOnly.FromDateTime(DateTime.Now);
 
-        var appointments = await _persistence.GetFiltered<Appointment>(
-            appointment => appointment.Patient.Dni == dni &&
-                           appointment.Status == AppointmentStatus.Booked &&
-                           (appointment.AvailabilitySlot.SlotDate > today ||
-                           (appointment.AvailabilitySlot.SlotDate == today &&
-                            appointment.AvailabilitySlot.StartTime > currentTime)),
-            AppointmentIncludes,
-            nameof(Appointment.Patient));
+        IEnumerable<Appointment> appointments =
+         await _persistence.GetFiltered<Appointment>(
+             appointment =>
+                 appointment.Patient.Dni == dni &&
+                 appointment.Status == AppointmentStatus.Booked &&
+                 (
+                     appointment.AvailabilitySlot.SlotDate > today ||
+                     (
+                         appointment.AvailabilitySlot.SlotDate == today &&
+                         appointment.AvailabilitySlot.StartTime > currentTime
+                     )
+                 ),
+             AppointmentIncludes,
+             nameof(Appointment.Patient));
+
 
         return appointments
             .OrderBy(x => x.AvailabilitySlot.SlotDate)
