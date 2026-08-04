@@ -225,7 +225,7 @@ public class AppointmentService : IAppointmentService
             nameof(Appointment.Patient));
 
         _logger.LogInformation(
-            "Búsqueda avanzada de citas ejecutada. Especialidad: {SpecialityId}, Médico: {DoctorId}, DNI: {Dni}, Fecha: {Date}",
+            "Búsqueda avanzada de citas ejecutada. Especialidad: {SpecialityId}, Médico: {DoctorId}, DNI: {Dni}, Fecha: {Date}, Página {PageIndex}, Tamaño {PageSize}",
             specialityId,
             doctorId,
             dni.HasValue,

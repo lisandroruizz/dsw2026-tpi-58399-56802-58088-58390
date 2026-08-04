@@ -61,7 +61,7 @@ namespace Dsw2026Tpi.Application.Services
         {
          Validate(request);
             Speciality speciality = await _persistence.GetById<Speciality>(id)
-         ?? throw new EntityNotFoundException( "Especialidad");
+         ?? throw new EntityNotFoundException(ErrorCodeNames.SpecialityNotFound,"Especialidad");
             string name = request.Name!.Trim();
             await EnsureNameIsAvailable(name, id);
             speciality.Update(name, request.Description!);
@@ -79,7 +79,7 @@ namespace Dsw2026Tpi.Application.Services
         public async Task Delete(Guid id)
         {
             Speciality speciality = await _persistence.GetById<Speciality>(id)
-            ?? throw new EntityNotFoundException( "Especialidad");
+            ?? throw new EntityNotFoundException(ErrorCodeNames.SpecialityNotFound,"Especialidad");
             await _persistence.Delete(speciality);
             await _persistence.SaveChanges();
         }
