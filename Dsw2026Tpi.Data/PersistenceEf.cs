@@ -69,6 +69,7 @@ public class PersistenceEf: IPersistence
         return await Include(_context.Set<T>(), include).Where(predicate).ToListAsync();
     }
 
+
     public Task<T> Update<T>(T entity) where T : EntityBase
     {
         _context.Update(entity);
