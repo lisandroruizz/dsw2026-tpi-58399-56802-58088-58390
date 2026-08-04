@@ -9,8 +9,8 @@ public class AuthenticationException : AppException
 {
     public AuthenticationException()
         : base(
-            ErrorCodes.AUTHENTICATION_FAILED,
-            nameof(ErrorCodes.AUTHENTICATION_FAILED))
+            ErrorCodeNames.AuthenticationFailed,
+            ErrorCodes.AUTHENTICATION_FAILED)
     {
     }
 }

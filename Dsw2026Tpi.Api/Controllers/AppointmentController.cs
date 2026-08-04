@@ -1,8 +1,10 @@
-﻿using Dsw2026Tpi.Application.Dtos;
+﻿using Dsw2026Tpi.Api.Resources;
+using Dsw2026Tpi.Application.Dtos;
 using Dsw2026Tpi.Application.Interfaces;
 using Dsw2026Tpi.CrossCutting.Identity;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace Dsw2026Tpi.Api.Controllers;
 
@@ -18,6 +20,7 @@ public class AppointmentController : AppController
     }
 
     [Authorize(Policy = Policies.PatientPolicy)]
+    [EnableRateLimiting(RateLimitPolicies.AppointmentBooking)]
     [HttpPost]
     [ProducesResponseType(typeof(AppointmentModel.Response), StatusCodes.Status201Created)]
     public async Task<IActionResult> Create([FromBody] AppointmentModel.Request request)
@@ -47,9 +50,17 @@ public class AppointmentController : AppController
     [Authorize(Policy = Policies.AdminPolicy)]
     [HttpGet]
     [ProducesResponseType(StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetByDate([FromQuery] DateOnly date)
+    public async Task<IActionResult> GetByDate([FromQuery]
+            int pageSize = 10,
+            [FromQuery]
+            int pageIndex = 0,
+            [FromQuery]
+            DateOnly date = default)
     {
-        return Ok(await _service.GetByDate(date));
+        return Ok(await _service.GetByDate(
+                pageSize,
+                pageIndex,
+                date));
     }
 
     [Authorize(Policy = Policies.AdminPolicy)]

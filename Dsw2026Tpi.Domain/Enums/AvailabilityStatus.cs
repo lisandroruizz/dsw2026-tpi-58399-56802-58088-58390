@@ -7,8 +7,8 @@ namespace Dsw2026Tpi.Domain.Enums
     public enum AvailabilityStatus
     {
         Available,
-        Reserved,
-        Booked
+        Booked,
+        Blocked
     }
 
 

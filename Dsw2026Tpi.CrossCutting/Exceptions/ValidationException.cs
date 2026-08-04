@@ -10,9 +10,18 @@ public class ValidationException : AppException
 {
     public ValidationException()
         : base(
-            ErrorCodes.VALIDATION_ERROR,
-            nameof(ErrorCodes.VALIDATION_ERROR))
+             ErrorCodeNames.ValidationError,
+            ErrorCodes.VALIDATION_ERROR)
     {
+    }
+
+    public ValidationException(
+        IEnumerable<(
+            string Field,
+            string Issue)> details)
+        : this()
+    {
+        WithDetail(details);
     }
 
     public ValidationException(string message, string errorCode)

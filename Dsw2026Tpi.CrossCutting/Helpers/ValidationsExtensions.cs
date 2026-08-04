@@ -17,4 +17,11 @@ public static class ValidationsExtensions
             && value.Length >= min
             && value.Length <= max;
     }
+
+    public static bool HasDigits(this long value,int minimum,int maximum)
+    {
+        int length = Math.Abs(value).ToString().Length;
+
+        return length >= minimum && length <= maximum;
+    }
 }

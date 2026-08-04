@@ -48,7 +48,8 @@ public class DoctorService : IDoctorService
     {
         Validate(request);
         Speciality speciality = await GetSpeciality(request.SpecialityId);
-        Doctor doctor = await _persistence.GetById<Doctor>(id, nameof(Doctor.Speciality)) ?? throw new EntityNotFoundException("Médico");
+        Doctor doctor = await _persistence.GetById<Doctor>(id, nameof(Doctor.Speciality)) ?? throw new EntityNotFoundException(ErrorCodeNames.DoctorNotFound,
+        "Médico");
         doctor.Update(request.Name!, request.LicenseNumber!, speciality);
         await _persistence.Update(doctor);
         await _persistence.SaveChanges();
@@ -57,7 +58,8 @@ public class DoctorService : IDoctorService
 
     public async Task Delete(Guid id)
     {
-        Doctor doctor = await _persistence.GetById<Doctor>(id) ?? throw new EntityNotFoundException( "Médico");
+        Doctor doctor = await _persistence.GetById<Doctor>(id) ?? throw new EntityNotFoundException(ErrorCodeNames.DoctorNotFound,
+        "Médico");
         await _persistence.Delete(doctor);
         await _persistence.SaveChanges();
 
@@ -66,34 +68,35 @@ public class DoctorService : IDoctorService
     public async Task<IReadOnlyCollection<AvailabilityModel.ScheduleResponse>> GetMonthlyAvailabilities(Guid doctorId)
     {
         _ = await _persistence.GetById<Doctor>(doctorId)
-            ?? throw new EntityNotFoundException("Médico");
+            ?? throw new EntityNotFoundException(ErrorCodeNames.DoctorNotFound,
+        "Médico");
 
         DateOnly today = DateOnly.FromDateTime(DateTime.Today);
         DateOnly firstDay = new(today.Year, today.Month, 1);
         DateOnly lastDay = firstDay.AddMonths(1).AddDays(-1);
 
-        var availabilities = (await _persistence.GetFiltered<Availability>(
-                availability => availability.DoctorId == doctorId &&
-                                availability.Date >= firstDay &&
-                                availability.Date <= lastDay))
-            .ToArray();
+        IEnumerable<AvailabilityRule> rules = await _persistence.GetFiltered<AvailabilityRule>(
+            rule => rule.DoctorId == doctorId && rule.Month == today.Month && rule.Year == today.Year);
 
-        return availabilities
-            .GroupBy(x => x.Date.DayOfWeek)
-            .OrderBy(x => DayOrder(x.Key))
-            .Select(group => new AvailabilityModel.ScheduleResponse(
-                DayName(group.Key),
-                group.Min(x => x.StartTime).ToString("HH:mm"),
-                group.Max(x => x.EndTime).ToString("HH:mm")))
+        return rules
+            .OrderBy(rule => DayOrder(rule.DayOfWeek))
+            .ThenBy(rule => rule.StartTime)
+            .Select(rule => new AvailabilityModel.ScheduleResponse(
+                rule.Id,
+                DayName(rule.DayOfWeek),
+                rule.StartTime.ToString("HH:mm"),
+                rule.EndTime.ToString("HH:mm")))
             .ToArray();
     }
     private async Task<Speciality> GetSpeciality(Guid specialityId)
     {
         if (specialityId == Guid.Empty)
         {
-            throw new EntityNotFoundException("Especialidad");
+            throw new EntityNotFoundException(ErrorCodeNames.SpecialityNotFound,
+            "Especialidad");
         }
-        return await _persistence.GetById<Speciality>(specialityId) ?? throw new EntityNotFoundException("Especialidad");
+        return await _persistence.GetById<Speciality>(specialityId) ?? throw new EntityNotFoundException(ErrorCodeNames.SpecialityNotFound,
+            "Especialidad");
     }
     private static void Validate(DoctorModel.Request request)
     {

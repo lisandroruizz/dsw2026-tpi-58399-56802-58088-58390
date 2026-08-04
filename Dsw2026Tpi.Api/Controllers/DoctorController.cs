@@ -33,7 +33,7 @@ public class DoctorController : AppController
         return Ok(await _service.GetMonthlyAvailabilities(id));
     }   
 
-    [Authorize(Policy = Policies.AdminPolicy)]
+        [Authorize(Policy = Policies.AdminPolicy)]
         [HttpPost]
         [ProducesResponseType(typeof(DoctorModel.Response), StatusCodes.Status201Created)]
 

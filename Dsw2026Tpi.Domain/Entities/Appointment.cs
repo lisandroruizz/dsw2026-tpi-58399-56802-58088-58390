@@ -7,13 +7,14 @@ namespace Dsw2026Tpi.Domain.Entities;
 
 public class Appointment : EntityBase
 {
-    public Guid AvailabilityId { get; private set; }
-    public Availability Availability { get; private set; }
+    public Guid AvailabilitySlotId { get; private set; }
+    public AvailabilitySlot AvailabilitySlot { get; private set; }
     public Guid PatientId { get; private set; }
     public Patient Patient { get; private set; }
     public string Reason { get; private set; }
     public AppointmentStatus Status { get; private set; }
     public DateTime? CancelledAt { get; private set; }
+    public DateTime? AttendedAt{ get; private set; }
 
     #region Constructor for EF 
 
@@ -21,10 +22,10 @@ public class Appointment : EntityBase
     private Appointment() { }
 #pragma warning restore CS8618
     #endregion
-    public Appointment(Availability availability, Patient patient, string reason, Guid? id = null) : base(id)
+    public Appointment(AvailabilitySlot availabilitySlot, Patient patient, string reason, Guid? id = null) : base(id)
     {
-        Availability = availability;
-        AvailabilityId = availability.Id;
+        AvailabilitySlot = availabilitySlot;
+        AvailabilitySlotId = availabilitySlot.Id;
         Patient = patient;
         PatientId = patient.Id;
         Reason = reason.Trim();

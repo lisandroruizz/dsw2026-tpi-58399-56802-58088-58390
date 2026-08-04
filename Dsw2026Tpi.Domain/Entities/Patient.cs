@@ -9,7 +9,7 @@ public class Patient : EntityBase
     public long Dni { get; private set; }
     public string Email { get; private set; }
     public string ApplicationUserId { get; private set; }
-    public string? Name { get; private set; }
+    public string? FullName { get; private set; }
     public string? Phone { get; private set; }
 
     public ICollection<Appointment> Appointments { get; private set; } = new List<Appointment>();
@@ -28,9 +28,9 @@ public class Patient : EntityBase
         ApplicationUserId = applicationUserId; 
     }
 
-    public void UpdateContactData(string? name, string? phone)
+    public void UpdateContactData(string? fullName, string? phone)
     {
-        Name = string.IsNullOrWhiteSpace(name) ? null : name.Trim();
+        FullName = string.IsNullOrWhiteSpace(fullName) ? null : fullName.Trim();
         Phone = string.IsNullOrWhiteSpace(phone) ? null : phone.Trim(); 
 
     }

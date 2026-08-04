@@ -17,7 +17,8 @@ public class SpecialityConfiguration : IEntityTypeConfiguration<Speciality>
         builder.Property(x => x.Description).IsRequired().HasMaxLength(100);
         builder.Property(x => x.Deleted).IsRequired().HasDefaultValue(false);
 
-        builder.HasIndex(x => x.Name);
+        builder.HasIndex(speciality => speciality.Name).IsUnique().HasDatabaseName("UX_Specialities_ActiveName")
+           .HasFilter("[Deleted] = 0");
         builder.HasQueryFilter(x => !x.Deleted); 
 
             

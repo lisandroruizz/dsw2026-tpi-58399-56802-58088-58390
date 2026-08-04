@@ -6,8 +6,8 @@ public class Doctor: EntityBase
     public string LicenseNumber { get; private set; }
     public Guid SpecialityId { get; private set; }
     public Speciality Speciality { get; private set; }
-    public ICollection<Availability> Availabilities { get; private set; } = new List<Availability>();
-
+    public ICollection<AvailabilityRule> AvailabilityRules { get; private set; } = new List<AvailabilityRule>();
+    public ICollection<AvailabilitySlot> AvailabilitySlots { get; private set; } = new List<AvailabilitySlot>();
     #region Constructor for EF
 #pragma warning disable CS8618
     private Doctor()
