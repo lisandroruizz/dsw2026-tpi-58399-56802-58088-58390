@@ -8,7 +8,7 @@ using Dsw2026Tpi.Application.Dtos;
 namespace Dsw2026Tpi.Api.Controllers;
 
 [Route("api/doctors")]
-[Authorize(Policy = Policies.AdminPolicy)]
+[Authorize]
 public class DoctorController : AppController
 {
     private readonly IDoctorService _service;
